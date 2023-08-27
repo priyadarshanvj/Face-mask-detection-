@@ -2,21 +2,21 @@
 # coding: utf-8
 
 # In[1]:
-
-
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications import MobileNetV2
-from tensorflow.keras.layers import AveragePooling2D
-from tensorflow.keras.layers import Dropout
-from tensorflow.keras.layers import Flatten
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import Input
-from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
-from tensorflow.keras.preprocessing.image import img_to_array
-from tensorflow.keras.preprocessing.image import load_img
-from tensorflow.keras.utils import to_categorical
+import tensorflow as tf
+from tensorflow import keras
+from keras.preprocessing.image import ImageDataGenerator
+from keras.applications import MobileNetV2
+from keras.layers import AveragePooling2D
+from keras.layers import Dropout
+from keras.layers import Flatten
+from keras.layers import Dense
+from keras.layers import Input
+from keras.models import Model
+from keras.optimizers import Adam
+from keras.applications.mobilenet_v2 import preprocess_input
+from keras.utils import img_to_array
+from keras.utils import load_img
+from keras.utils import to_categorical
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
@@ -37,7 +37,7 @@ EPOCHS = 20
 # batch size
 BS = 32
 
-DIRECTORY = r"F:\8th Sem\Final year project\Code_Mask Detection\Datasets\data"
+DIRECTORY = r"F:\Final Sem\Final year project\Code_Foriegn Object detection\Datasets\data"
 CATEGORIES = ["with_mask", "without_mask"]
 
 
@@ -54,14 +54,13 @@ labels = []
 for category in CATEGORIES:
     path = os.path.join(DIRECTORY, category)
     for img in os.listdir(path):
-     img_path = os.path.join(path, img)
-     image = load_img(img_path, target_size=(224, 224))
-     image = img_to_array(image)
-     image = preprocess_input(image)
-
-data.append(image)
-labels.append(category)
-
+        img_path = os.path.join(path, img)
+        image = load_img(img_path, target_size=(224, 224))
+        image = img_to_array(image)
+        image = preprocess_input(image)
+        
+        data.append(image)
+        labels.append(category)
 
 lb = LabelBinarizer()
 labels = lb.fit_transform(labels)
@@ -70,8 +69,25 @@ labels = to_categorical(labels)
 data = np.array(data, dtype="float32")
 labels = np.array(labels)
 
-(trainX, testX, trainY, testY) = train_test_split(data, labels,
-	test_size=0.20, stratify=labels, random_state=42)
+
+if len(data) < 2:
+    #print("Use the entire dataset for training")
+    trainX = data
+    trainY = labels
+    testX = None
+    testY = None
+else:
+    trainX, testX, trainY, testY = train_test_split(data, labels, test_size=0.2, stratify=labels, random_state=42)
+
+# Check if testX and testY are empty
+if testX is None or testY is None:
+    print("Using the entire dataset for training.")
+else:
+    print("Data split into training and testing sets.")
+
+    
+testX = np.array(testX)
+testY = np.array(testY)
 
 aug = ImageDataGenerator(
 	rotation_range=20,
@@ -109,46 +125,35 @@ for layer in baseModel.layers:
 # compile our model
 print("[INFO] compiling model...")
 opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
-model.compile(loss="binary_crossentropy", optimizer=opt,
-	metrics=["accuracy"])
+model.compile(loss="binary_crossentropy", optimizer=opt, metrics=["accuracy"], run_eagerly=True)
 
 # train the head of the network
-print("[INFO] training head...")
-H = model.fit(
-	aug.flow(trainX, trainY, batch_size=BS),
-	steps_per_epoch=len(trainX) // BS,
-	validation_data=(testX, testY),
-	validation_steps=len(testX) // BS,
-	epochs=EPOCHS)
+
+
+
+print("testX shape:", testX.shape)
+print("testY shape:", testY.shape)
 
 
 # In[24]:
 
 
 # make predictions on the testing set
-print("[INFO] evaluating network...")
-predIdxs = model.predict(testX, batch_size=BS)
+if testX is not None and testY is not None:
+    print("[INFO] evaluating network...")
+    predIdxs = model.predict(testX, batch_size=BS)
 
-# for each image in the testing set we need to find the index of the
-# label with corresponding largest predicted probability
-predIdxs = np.argmax(predIdxs, axis=1)
+    # for each image in the testing set, find the index of the
+    # label with the corresponding largest predicted probability
+    predIdxs = np.argmax(predIdxs, axis=1)
 
-# show a nicely formatted classification report
-print(classification_report(testY.argmax(axis=1), predIdxs,
-	target_names=lb.classes_))
+    # show a nicely formatted classification report
+    print(classification_report(testY.argmax(axis=1), predIdxs,
+        target_names=lb.classes_))
+else:
+    print("No test set defined. Skipping prediction step.")
 
 # serialize the model to disk
 print("[INFO] saving mask detector model...")
 model.save("mask_detector1.model", save_format="h5")
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
 
