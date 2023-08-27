@@ -2,7 +2,7 @@
 # coding: utf-8
 
 # In[1]:
-import tensorflow as tf
+
 from tensorflow import keras
 from keras.preprocessing.image import ImageDataGenerator
 from keras.applications import MobileNetV2
@@ -37,7 +37,7 @@ EPOCHS = 20
 # batch size
 BS = 32
 
-DIRECTORY = r"F:\Final Sem\Final year project\Code_Foriegn Object detection\Datasets\data"
+DIRECTORY = r"F:\Final Sem\Final year project\Code_Mask Detection\Datasets\data"
 CATEGORIES = ["with_mask", "without_mask"]
 
 
@@ -58,9 +58,13 @@ for category in CATEGORIES:
         image = load_img(img_path, target_size=(224, 224))
         image = img_to_array(image)
         image = preprocess_input(image)
-        
+          
         data.append(image)
         labels.append(category)
+
+data.append(image)
+labels.append(category)
+
 
 lb = LabelBinarizer()
 labels = lb.fit_transform(labels)
@@ -69,25 +73,8 @@ labels = to_categorical(labels)
 data = np.array(data, dtype="float32")
 labels = np.array(labels)
 
-
-if len(data) < 2:
-    #print("Use the entire dataset for training")
-    trainX = data
-    trainY = labels
-    testX = None
-    testY = None
-else:
-    trainX, testX, trainY, testY = train_test_split(data, labels, test_size=0.2, stratify=labels, random_state=42)
-
-# Check if testX and testY are empty
-if testX is None or testY is None:
-    print("Using the entire dataset for training.")
-else:
-    print("Data split into training and testing sets.")
-
-    
-testX = np.array(testX)
-testY = np.array(testY)
+(trainX, testX, trainY, testY) = train_test_split(data, labels,
+	test_size=0.2, stratify=labels, random_state=42)
 
 aug = ImageDataGenerator(
 	rotation_range=20,
@@ -125,35 +112,46 @@ for layer in baseModel.layers:
 # compile our model
 print("[INFO] compiling model...")
 opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
-model.compile(loss="binary_crossentropy", optimizer=opt, metrics=["accuracy"], run_eagerly=True)
+model.compile(loss="binary_crossentropy", optimizer=opt,
+	metrics=["accuracy"])
 
 # train the head of the network
-
-
-
-print("testX shape:", testX.shape)
-print("testY shape:", testY.shape)
+print("[INFO] training head...")
+H = model.fit(
+	aug.flow(trainX, trainY, batch_size=BS),
+	steps_per_epoch=len(trainX) // BS,
+	validation_data=(testX, testY),
+	validation_steps=len(testX) // BS,
+	epochs=EPOCHS)
 
 
 # In[24]:
 
 
 # make predictions on the testing set
-if testX is not None and testY is not None:
-    print("[INFO] evaluating network...")
-    predIdxs = model.predict(testX, batch_size=BS)
+print("[INFO] evaluating network...")
+predIdxs = model.predict(testX, batch_size=BS)
 
-    # for each image in the testing set, find the index of the
-    # label with the corresponding largest predicted probability
-    predIdxs = np.argmax(predIdxs, axis=1)
+# for each image in the testing set we need to find the index of the
+# label with corresponding largest predicted probability
+predIdxs = np.argmax(predIdxs, axis=1)
 
-    # show a nicely formatted classification report
-    print(classification_report(testY.argmax(axis=1), predIdxs,
-        target_names=lb.classes_))
-else:
-    print("No test set defined. Skipping prediction step.")
+# show a nicely formatted classification report
+print(classification_report(testY.argmax(axis=1), predIdxs,
+	target_names=lb.classes_))
 
 # serialize the model to disk
 print("[INFO] saving mask detector model...")
 model.save("mask_detector1.model", save_format="h5")
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
 
